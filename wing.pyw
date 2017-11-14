@@ -389,12 +389,19 @@ class Application(Frame):
             line = line + 'G21 '
             self.Safe = 1  #1 mm
             dec = 1
-        line = line + 'M3 '
+        line = line + 'M3 S100 '
         if len(self.FeedrateVar.get())>0:
             line = line +  'F%s\n' % self.FeedrateVar.get()
         else:
             line = line + '\n'
         alist.append(line)
+
+        #these tell LinuxCNC where to put the XY and UV on the screen
+        line = "(AXIS,XY_Z_POS,0)\n"
+        alist.append(line)
+        line = "(AXIS,UV_Z_POS,%.3f)\n" % (self.gantry)
+        alist.append(line)
+        
         alist.append('(modelname ' + self.modelname + ')\n')
 
         alist.append('(wingspan ' + self.Format(self.wingspan,dec)  + ')\n')
@@ -762,10 +769,10 @@ class Application(Frame):
          flist.append( fmt0 % (2*retract,-2*retract,2*retract,-2*retract))
       if (flag):
          if (invert == -1):
-            flist.append("M30\n")
+            flist.append("M5\nM30\n")
             flist.append("%\n")
       else:
-         flist.append("M30\n")
+         flist.append("M5\nM30\n")
          flist.append("%\n")
       #end of plot()
 
