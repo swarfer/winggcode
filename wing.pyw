@@ -4,6 +4,7 @@
 # Version self.Id: wing.pyw 1.1 2017/10/23 07:46:09 david Exp self.
 # Dec 4 2007
 # XYUV wing G-Code Generator for EMC2
+# also YZ/XZ for GRBL for straight wings only
 """
     Copyright (C) <2008>  <John Thornton>
 
@@ -44,6 +45,8 @@
 
 2017-11-16 swarfer: modified into a wing cutter, based on gwing.php by the swarfer
     python 2.x only...
+
+2018-02-06 swarfer: cut wings in YZ or XZ only, straight wings on a gantry XYZ machine    
 """
 
 from Tkinter import *
@@ -297,18 +300,29 @@ class Application(Frame):
         for text, value, side in UnitOptions:
             Radiobutton(self, text=text,value=value, variable=self.UnitVar,indicatoron=0,width=6,).grid(row=8, column=3,sticky=side)
         self.UnitVar.set(0)
+# XYUV/YZ/XZ
+        self.XYUVVar = IntVar()  # 0 for XYUV , 1 for YZ, 2 for XZ
+        self.st13 = Label(self, text='XYUV/YZ/XZ ')
+        self.st13.grid(row=9, column=0, sticky=E)
+        urad1 = Radiobutton(self, text='XYUV', variable=self.XYUVVar, value=0)
+        urad1.grid(row=9, column=1, sticky=W)
+        urad2 = Radiobutton(self, text='YZ only', variable=self.XYUVVar, value=1)
+        urad2.grid(row=9, column=2, sticky=W)
+        urad1 = Radiobutton(self, text='XZ only', variable=self.XYUVVar, value=2)
+        urad1.grid(row=9, column=3, sticky=W)
+        self.XYUVVar.set(0)
 
         self.spacer3 = Label(self, text='')
-        self.spacer3.grid(row=9, column=0, columnspan=5)
-
-        self.g_code = Text(self,width=30,height=15,bd=3)
-        self.g_code.grid(row=10, column=0, columnspan=4, sticky=E+W+N+S)
+        self.spacer3.grid(row=10, column=0, columnspan=5)
+# gcode block
+        self.g_code = Text(self,width=30,height=14,bd=3)
+        self.g_code.grid(row=11, column=0, columnspan=4, sticky=E+W+N+S)
         self.tbscroll = Scrollbar(self,command = self.g_code.yview)
-        self.tbscroll.grid(row=10, column=4, sticky=N+S+W)
+        self.tbscroll.grid(row=11, column=4, sticky=N+S+W)
         self.g_code.configure(yscrollcommand = self.tbscroll.set)
 
         self.sp4 = Label(self)
-        self.sp4.grid(row=11)
+        self.sp4.grid(row=12)
 
         #make sure these exist so pressing save button before generate does not crash
         self.g_code_left = list()
@@ -371,6 +385,7 @@ class Application(Frame):
            self.feedrate = 1
            self.g_code.insert(END,'WARNING: feedrate cannot be ZERO\n')
         self.xy = self.XYsideVar.get()
+        self.xyuv = self.XYUVVar.get()
         self.unit = self.UnitVar.get()
         if self.unit:
            self.units = '"'
@@ -597,6 +612,8 @@ class Application(Frame):
          w =  -self.E2
          flist.append( "(Swept Wing)\n")
          flist.append( "(minimum material chord is %0.3f%s with wastage of %0.3f%s at trailing edge)\n" % (mmc, self.units,w,self.units))
+         if (self.xyuv != 0):
+             flist.append("(generating cartesian gantry, taper ignored)\n")
       
       flist.append( "(root gantry thickness = %0.1f%s)\n" % (self.rootymax - self.rootymin, self.units))
       flist.append( "(tip gantry thickness = %0.1f%s)\n" % (self.tipymax - self.tipymin, self.units))
@@ -605,23 +622,36 @@ class Application(Frame):
       if (self.foamchord and  self.foamthickness):
          ws = self.wingspan
          flist.append( "(foam block %.3f'wingspan' x %.3f x %.3f%s)\n" % (ws,self.foamchord,self.foamthickness,self.units));
-      if (self.xy):
-         flist.append( "(XY gantry left)\n")
+      if (self.xyuv == 0):
+         if (self.xy):
+            flist.append( "(XY gantry left)\n")
+         else:
+            flist.append( "(XY gantry right)\n")
       else:
-         flist.append( "(XY gantry right)\n")
-         
+         if (self.xyuv == 1):
+            self.g_code.insert(END, "YZ")
+            flist.append( "(YZ gantry)\n")
+         else:
+            self.g_code.insert(END, "XZ" )
+            flist.append( "(XZ gantry)\n")      
       #z = 0 - self.rootymin
       flist.append( "(trailing edge will be AT LEAST %0.1f%s above bottom of panel)\n" % (self.sp, self.units))
       #if (self.trail > 0):
       #   flist.append( "(Trailing edge limit %0.2f%s)\n" % (self.trail, self.units))
       if (self.unit):   
          flist.append( "G20\n");  # inch mode
-         flist.append( "G90 G49 G64 P0.01\n")
+         if (self.xyuv == 0):
+             flist.append( "G90 G49 G64 P0.01\n")
+         else:
+             flist.append( "G90 G49\n")
          prec = '%0.4f'  # thous/10 for inch mode
          retract = -0.25
       else:   
          flist.append( "G21\n")  # metric mode
-         flist.append( "G90 G49 G64 P0.25\n")
+         if (self.xyuv == 0):
+             flist.append( "G90 G49 G64 P0.25\n")
+         else:
+             flist.append( "G90 G49\n")
          prec = '%0.3f'  # 1/1000 mm for metricmode
          retract = -5.0
          
@@ -632,7 +662,13 @@ class Application(Frame):
           print(retract)
           print(sp)
           print(self.feedrate)
-      fmt = "G00 X"+prec+" Y"+prec+" U"+prec+" V"+prec+" F%0.1f\n"
+      if (self.xyuv == 0):
+          fmt = "G00 X"+prec+" Y"+prec+" U"+prec+" V"+prec+" F%0.1f\n"
+      else:
+          if (self.xyuv == 1): # YZ
+              fmt = "G00 Y"+prec+" Z"+prec+" F%0.1f\n"
+          else:  #XZ
+              fmt = "G00 X"+prec+" Z"+prec+" F%0.1f\n"
       #start heights, sp + offset of first point on top surface
       if flag and (invert == -1):
           #doing an upside down profile, do lower side first, ie run loop backwards
@@ -654,7 +690,10 @@ class Application(Frame):
                shXY = sp + p2[start][1]
                shUV = sp + p1[start][1]
       flist.append("(seek to start height)\n")
-      flist.append( fmt  % (retract,shXY,retract,shUV,self.feedrate)) # EMC bleats if no feed speed on first G0 instructions
+      if (self.xyuv == 0):
+          flist.append( fmt  % (retract,shXY,retract,shUV,self.feedrate)) # EMC bleats if no feed speed on first G0 instructions
+      else:
+          flist.append( fmt  % (retract,shXY,self.feedrate))
       spt = [0,shXY,0,shUV]
       # do skins and then cut, assume wire 0,0 on surface of platten
       self.g_code.insert(END, "   doing '%s' with Foamthick %.3f%s\n" % (direc,self.foamthickness, self.units))
@@ -675,7 +714,20 @@ class Application(Frame):
       """		
       # seek to start point
       # must create the format string before using it
-      fmt = "G01 X"+prec+" Y"+prec+" U"+prec+" V"+prec+"\n"
+      if (self.xyuv == 0):
+          fmt = "G01 X"+prec+" Y"+prec+" U"+prec+" V"+prec+"\n"
+      else:
+          if (self.xyuv == 1):
+              fmt = "G01 Y"+prec+" Z"+prec+"\n"
+          else:
+              fmt = "G01 X"+prec+" Z"+prec+"\n"
+      if (self.xyuv != 0) and (self.toffset != 0):
+          flist.append("(Need a Straight wing please)\n")
+          self.g_code.insert(END, "  Straight wings only! aborting")
+          return
+      #else:
+          #flist.append("(do we need a seek to trailing edge here?)\n")
+          
       if (self.toffset > 0):
          flist.append("(seek to trailing edge)\n")
          if (self.xy):	# XY gantry on left
@@ -734,32 +786,51 @@ class Application(Frame):
       flist.append("(do profile)\n" ) 
       for idx in range(start, end, step):
          #print "idx %d" % idx
-         if (self.xy): # XY gantry on left
-            if (direc == 'right'):
-               flist.append(fmt % (p1[idx][0] + xoffset, sp + p1[idx][1] * invert, p2[idx][0] + uoffset, sp + p2[idx][1] * invert))
-            else:
-               flist.append(fmt % (p1[idx][0] + uoffset, sp + p1[idx][1] * invert, p2[idx][0] + xoffset, sp + p2[idx][1] * invert))   
-         else:	# XY gantry on right
-            if (direc == 'left'):
-               flist.append(fmt % (p1[idx][0] + xoffset, sp + p1[idx][1] * invert, p2[idx][0] + uoffset, sp + p2[idx][1] * invert))
-            else:
-               flist.append(fmt % (p1[idx][0] + uoffset, sp + p1[idx][1] * invert, p2[idx][0] + xoffset, sp + p2[idx][1] * invert))
+         if (self.xyuv == 0):
+             if (self.xy): # XY gantry on left
+                if (direc == 'right'):
+                   flist.append(fmt % (p1[idx][0] + xoffset, sp + p1[idx][1] * invert, p2[idx][0] + uoffset, sp + p2[idx][1] * invert))
+                else:
+                   flist.append(fmt % (p1[idx][0] + uoffset, sp + p1[idx][1] * invert, p2[idx][0] + xoffset, sp + p2[idx][1] * invert))   
+             else:	# XY gantry on right
+                if (direc == 'left'):
+                   flist.append(fmt % (p1[idx][0] + xoffset, sp + p1[idx][1] * invert, p2[idx][0] + uoffset, sp + p2[idx][1] * invert))
+                else:
+                   flist.append(fmt % (p1[idx][0] + uoffset, sp + p1[idx][1] * invert, p2[idx][0] + xoffset, sp + p2[idx][1] * invert))
+         else:
+            #self.g_code.insert(END, fmt)  
+            flist.append(fmt % (p1[idx][0] + xoffset, sp + p1[idx][1] * invert  ))             
          #end idx loop
 
       #close the trailing edge by going back to start point
       flist.append("(close trailing edge)\n" )        
-      flist.append( fmt  % (spt[0], spt[1], spt[2], spt[3]) )
-               
+      if (self.xyuv == 0):
+         flist.append( fmt  % (spt[0], spt[1], spt[2], spt[3]) )
+      else:
+         flist.append( fmt  % (spt[0], spt[1]) )
+      if (self.xyuv != 0):
+         flist.append("G4 P0.075\n")
       if self.unit:
          retract = -0.25
       else:
          retract = -5
       #retract
-      flist.append("(retract out of foam)\n" )    
-      flist.append( fmt % (retract,shXY,retract,shUV))
+      flist.append("(retract out of foam)\n" )
+      if (self.xyuv == 0):
+          flist.append( fmt % (retract,shXY,retract,shUV))
+      else:
+          flist.append( fmt % (retract*2,shXY))
+      flist.append("G4 P0.075\n")
       if ( not(flag) or  ( (invert == -1) and  flag)):
-         fmt0 =  "G00 X"+prec+" Y"+prec+" U"+prec+" V"+prec+"\n"
-         flist.append( fmt0 % (2*retract,-2*retract,2*retract,-2*retract))
+         if (self.xyuv == 0):
+            fmt0 =  "G00 X"+prec+" Y"+prec+" U"+prec+" V"+prec+"\n"
+            flist.append( fmt0 % (2*retract,-2*retract,2*retract,-2*retract))
+         else:
+            if (self.xyuv == 1):
+               fmt0 =  "G00 Y"+prec+" Z"+prec+"\n"
+            else:
+               fmt0 =  "G00 X"+prec+" Z"+prec+"\n"
+            flist.append( fmt0 % (2*retract,-2*retract))
       if (flag):
          if (invert == -1):
             flist.append("M30\n")
@@ -1008,31 +1079,43 @@ class Application(Frame):
         # os.path.join(self.NcFileDirectory, self.modelname, '-right.nc')           
         # os.path.join(self.NcFileDirectory, self.modelname, '-left.nc')
         # os.path.join(self.NcFileDirectory, self.modelname,'-both.nc')
-        fname = os.path.join(self.NcFileDirectory, self.modelname+ '-right' + self.ext)
-        of = open(fname,'w')
-        for line in self.g_code_right:
-           of.write(line)
-        of.close()
-        self.g_code.insert(END, 'Right file written ' + fname + '\n')
-
-        fname = os.path.join(self.NcFileDirectory, self.modelname + '-left' + self.ext)
-        of = open(fname,'w')
-        for line in self.g_code_left:
-           of.write(line)
-        of.close()
-        self.g_code.insert(END, 'Left file written ' + fname + '\n')
-
-        both = os.path.join(self.NcFileDirectory, self.modelname + '-both' + self.ext)
-        if self.need == 0:    
-           of = open(both,'w')
-           for line in self.g_code_both:
-               of.write(line)
+        if (self.xyuv == 0 ):
+           fname = os.path.join(self.NcFileDirectory, self.modelname+ '-right' + self.ext)
+           of = open(fname,'w')
+           for line in self.g_code_right:
+              of.write(line)
            of.close()
-           self.g_code.insert(END, 'Both file written ' + both + '\n')
-        else:
-            if os.path.exists(both):
-                os.unlink(both)
-         
+           self.g_code.insert(END, 'Right file written ' + fname + '\n')
+
+           fname = os.path.join(self.NcFileDirectory, self.modelname + '-left' + self.ext)
+           of = open(fname,'w')
+           for line in self.g_code_left:
+              of.write(line)
+           of.close()
+           self.g_code.insert(END, 'Left file written ' + fname + '\n')
+
+           both = os.path.join(self.NcFileDirectory, self.modelname + '-both' + self.ext)
+           if self.need == 0:    
+              of = open(both,'w')
+              for line in self.g_code_both:
+                  of.write(line)
+              of.close()
+              self.g_code.insert(END, 'Both file written ' + both + '\n')
+           else:
+               if os.path.exists(both):
+                   os.unlink(both)
+        else:  # write one file for cartesian cutter
+            if (self.xyuv == 1 ):
+               tag = 'YZ'
+            else:
+               tag = 'XZ'
+            fname = os.path.join(self.NcFileDirectory, self.modelname + '-'+tag + self.ext)
+            of = open(fname,'w')
+            for line in self.g_code_left:
+               of.write(line)
+            of.close()
+            self.g_code.insert(END, 'Cartesian written ' + fname + '\n')
+           
         #self.NewFileName = asksaveasfile(initialdir=self.NcFileDirectory,mode='w', master=self.master,title='Create NC File',defaultextension='.ngc')
         #self.NewFileName.write(self.g_code.get(0.0, END))
         #self.NewFileName.close()
