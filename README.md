@@ -2,6 +2,7 @@
 
 This program generates XYUV G-code for hotwire cutting model airplane wings.
 This program requires Python 2.7 to run and will integrate with LinuxCNC's AXIS interface.
+It can also be used alone.
 
 It has a database of airfoils in Selig DAT format.  
 You can add your own airfoils.
@@ -26,18 +27,25 @@ After that you can 'Write Files' (Windows) or use one of the 'Write to Axis' but
 ### The Gcode
 You get a xxx-left.nc and an xxx-right.nc where xxx is the name of the model.
 You MIGHT get a xxx-both.nc.   This file cuts both wings one above the other and is only generated if the foam is
-thick enough.  Despite some internal checks, you should carefully check that the wings do no toouch each other.
+thick enough.  Despite some internal checks, you should carefully check that the wings do no touch each other.
 In particular when high values of Washout are used the wingtips can collide inside the foam.
 The Gcode is very simple and will run on basic controllers like GRBL up to Mach3 and LinuxCNC.
 
 ### Cutting 
-Before you cut you need to set the wire heat to suite the feedrte you have set.
+Before you cut you need to set the wire heat to suite the feedrate you have set.
 You can check this by giving a command like
 G1 Y20 V20 F50
-(use your feedrate!) and hold a peice of foam in the wire path whiel the wire moves up.
+(use your feedrate!) and hold a piece of foam in the wire path while the wire moves up.
 Adjust wire heat until you are happy.  The wire must not touch the foam! 
 
 The 0,0 point on the foam block is at the bottom front corner, the corner on the table.   
 Set 0,0 with the wire cold.
 Now move the wire up and away from the table so it can safely get hot without melting the foam.
 Start the cut.
+
+### XYUV/XZ/YZ/XYUZ
+These options let you choose various forms of output.
+XYUV - the normal selection for a LinuxCNC dual gantry setup
+XZ - run a bow on XZ on a router style machine
+YZ - run a bow on YZ on a router style machine
+XYUZ - run a GRBL controlled dual gantry machine using [4 axis GRBL](https://www.rckeith.co.uk/how-to-build-a-usb-cnc-hot-wire-foam-cutter/).

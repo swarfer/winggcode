@@ -47,6 +47,7 @@
     python 2.x only...
 
 2018-02-06 swarfer: cut wings in YZ or XZ only, straight wings on a gantry XYZ machine    
+2020-05-10 swarfer: add XYUZ output for 4axis GRBL from rckeith
 """
 
 from Tkinter import *
@@ -301,8 +302,8 @@ class Application(Frame):
             Radiobutton(self, text=text,value=value, variable=self.UnitVar,indicatoron=0,width=6,).grid(row=8, column=3,sticky=side)
         self.UnitVar.set(0)
 # XYUV/YZ/XZ
-        self.XYUVVar = IntVar()  # 0 for XYUV , 1 for YZ, 2 for XZ
-        self.st13 = Label(self, text='XYUV/YZ/XZ ')
+        self.XYUVVar = IntVar()  # 0 for XYUV , 1 for YZ, 2 for XZ, 3 for XYUZ (GRBL mode)
+        self.st13 = Label(self, text='XYUV/YZ/XZ/XYUZ ')
         self.st13.grid(row=9, column=0, sticky=E)
         urad1 = Radiobutton(self, text='XYUV', variable=self.XYUVVar, value=0)
         urad1.grid(row=9, column=1, sticky=W)
@@ -310,6 +311,8 @@ class Application(Frame):
         urad2.grid(row=9, column=2, sticky=W)
         urad1 = Radiobutton(self, text='XZ only', variable=self.XYUVVar, value=2)
         urad1.grid(row=9, column=3, sticky=W)
+        urad3 = Radiobutton(self, text='XYUZ(GRBL)', variable=self.XYUVVar, value=3)
+        urad3.grid(row=9, column=4, sticky=W)
         self.XYUVVar.set(0)
 
         self.spacer3 = Label(self, text='')
@@ -386,6 +389,11 @@ class Application(Frame):
            self.g_code.insert(END,'WARNING: feedrate cannot be ZERO\n')
         self.xy = self.XYsideVar.get()
         self.xyuv = self.XYUVVar.get()
+        if self.xyuv == 3:
+           self.xyuv = 0
+           self.grblmode = True
+        else:
+           self.grblmode = False
         self.unit = self.UnitVar.get()
         if self.unit:
            self.units = '"'
@@ -647,21 +655,21 @@ class Application(Frame):
       #   flist.append( "(Trailing edge limit %0.2f%s)\n" % (self.trail, self.units))
       if (self.unit):   
          flist.append( "G20\n");  # inch mode
-         if (self.xyuv == 0):
-             flist.append( "G90 G49 G64 P0.01\n")
-         else:
-             flist.append( "G90 G49\n")
          prec = '%0.4f'  # thous/10 for inch mode
          retract = -0.25
       else:   
          flist.append( "G21\n")  # metric mode
-         if (self.xyuv == 0):
-             flist.append( "G90 G49 G64 P0.25\n")
-         else:
-             flist.append( "G90 G49\n")
          prec = '%0.3f'  # 1/1000 mm for metricmode
          retract = -5.0
-         
+
+      if (self.xyuv == 0):
+         flist.append( "G90\n")
+         if self.grblmode == False:
+            flist.append("G49 G64 P0.01\n") 
+      else:
+         flist.append( "G90 G49\n")
+
+       
       if self.debug: print("prec " + str(prec))
       # you will need to add in any other header codes you need, here
          
@@ -670,7 +678,10 @@ class Application(Frame):
           print(sp)
           print(self.feedrate)
       if (self.xyuv == 0):
-          fmt = "G00 X"+prec+" Y"+prec+" U"+prec+" V"+prec+" F%0.1f\n"
+         if self.grblmode:
+            fmt = "G00 X"+prec+" Y"+prec+" U"+prec+" Z"+prec+" F%0.1f\n"
+         else:
+            fmt = "G00 X"+prec+" Y"+prec+" U"+prec+" V"+prec+" F%0.1f\n"
       else:
           if (self.xyuv == 1): # YZ
               fmt = "G00 Y"+prec+" Z"+prec+" F%0.1f\n"
@@ -722,7 +733,10 @@ class Application(Frame):
       # seek to start point
       # must create the format string before using it
       if (self.xyuv == 0):
-          fmt = "G01 X"+prec+" Y"+prec+" U"+prec+" V"+prec+"\n"
+         if self.grblmode:
+            fmt = "G01 X"+prec+" Y"+prec+" U"+prec+" Z"+prec+"\n"
+         else:
+            fmt = "G01 X"+prec+" Y"+prec+" U"+prec+" V"+prec+"\n"
       else:
           if (self.xyuv == 1):
               fmt = "G01 Y"+prec+" Z"+prec+"\n"
@@ -830,7 +844,10 @@ class Application(Frame):
       flist.append("G4 P0.075\n")
       if ( not(flag) or  ( (invert == -1) and  flag)):
          if (self.xyuv == 0):
-            fmt0 =  "G00 X"+prec+" Y"+prec+" U"+prec+" V"+prec+"\n"
+            if self.grblmode:
+               fmt0 =  "G00 X"+prec+" Y"+prec+" U"+prec+" Z"+prec+"\n"
+            else:
+               fmt0 =  "G00 X"+prec+" Y"+prec+" U"+prec+" V"+prec+"\n"
             flist.append( fmt0 % (2*retract,-2*retract,2*retract,-2*retract))
          else:
             if (self.xyuv == 1):
@@ -1155,18 +1172,14 @@ class Application(Frame):
 
     def HelpInfo(self):
         SimpleDialog(self,
-            text='Required fields are:\n'
-            'Part Width & Length,\n'
-            'Amount to Remove,\n'
-            'and Feedrate\n'
-            'Fractions can be entered in most fields',
+            text='See the github page for help.\n',
             buttons=['Ok'],
             default=0,
             title='User Info').go()
     def HelpAbout(self):
         tkMessageBox.showinfo('Help About', 'Programmed by\n'
             'the Swarfer\n'
-            'Version 1.0.0')
+            'Version 1.0.1')
 
     # take an array read from a dat file and strip out all comments so we only have the co-ord numbers on return
     def stripfile(self, thefile):
