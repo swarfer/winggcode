@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
 # python wing.pyw
-# Version self.Id: wing.pyw 1.1 2017/10/23 07:46:09 david Exp self.
+# Version $Id: wing.pyw 1.1 2021/01/19 07:02:33 swarf Exp $
 # Dec 4 2007
 # XYUV wing G-Code Generator for EMC2
 # also YZ/XZ for GRBL for straight wings only
+# also XYUZ for GRBL 4axis
 """
     Copyright (C) <2008>  <John Thornton>
 
@@ -48,27 +49,32 @@
 
 2018-02-06 swarfer: cut wings in YZ or XZ only, straight wings on a gantry XYZ machine    
 2020-05-10 swarfer: add XYUZ output for 4axis GRBL from rckeith
+2021-10-14 rcKeith: Python3 compatibility
+2021-01-19 swarfer: fine tune for release for Python3
 """
 
-from Tkinter import *
-from tkFileDialog import *
+from tkinter import *
 from math import *
-from SimpleDialog import *
-import ConfigParser
+from tkinter.simpledialog import *
+import configparser
 from decimal import *
-import tkMessageBox
+import tkinter.messagebox
 import os
 import glob
 import string
 import re
 
-IN_AXIS = os.environ.has_key("AXIS_PROGRESS_BAR")
+# LinuxCNC variable
+IN_AXIS = "AXIS_PROGRESS_BAR" in os.environ
 
 class Application(Frame):
     def __init__(self, master=None):
-        Frame.__init__(self, master, width=700, height=400, bd=1)
+        Frame.__init__(self, master, bd=1, padx=10) 
         self.grid()
+        self.pack()
         self.createMenu()
+        
+        
         if IN_AXIS:
            self.ext = '.ngc'
         else:
@@ -86,15 +92,18 @@ class Application(Frame):
            """ save in ini in the NC folder """
            self.NcFileDirectory = self.GetIniData(self.inifile,'Directories','NcFiles')
         except:
-           tkMessageBox.showinfo('Missing INI Data', 'You must set the\n' \
-                'NC File Directory\n' \
+           tkinter.messagebox.showinfo('Missing INI Data', 'You must set the\n' \
+                'G-code File Directory\n' \
                 'before saving a file.\n' \
-                'Go to Edit/NC Directory\n' \
+                'Go to Edit/G-code Directory\n' \
                 'in the menu to set this option')
            return
-            
+        #Pad Rows
+        for row in range(1,9):   
+         self.rowconfigure(row,pad=5)    
+        
         self.createWidgets()
-
+        
         #center the window
         self.update_idletasks()
         width = self.winfo_width()
@@ -114,6 +123,7 @@ class Application(Frame):
                 self.ReadModel(filename)
         except:
             pass
+    
 
     def createMenu(self):
         #Create the Menu base
@@ -121,29 +131,38 @@ class Application(Frame):
         #Add the Menu
         self.master.config(menu=self.menu)
         #Create our File menu
-        self.FileMenu = Menu(self.menu)
+        self.FileMenu = Menu(self.menu,tearoff =FALSE)
         #Add our Menu to the Base Menu
         self.menu.add_cascade(label='File', menu=self.FileMenu)
+        #self.menu.option_add()
         #Add items to the menu
-        self.FileMenu.add_command(label='New', command=self.Simple)
-        self.FileMenu.add_command(label='Open', command=self.Simple)
-        self.FileMenu.add_separator()
+        #self.FileMenu.add_command(label='New', command=self.Simple)
+        #self.FileMenu.add_command(label='Open', command=self.Simple)
+        #self.FileMenu.add_separator()
         self.FileMenu.add_command(label='Quit', command=self.quit)
 
-        self.EditMenu = Menu(self.menu)
+        self.EditMenu = Menu(self.menu, tearoff =FALSE)
         self.menu.add_cascade(label='Edit', menu=self.EditMenu)
         self.EditMenu.add_command(label='Copy', command=self.CopyClpBd)
         self.EditMenu.add_command(label='Select All', command=self.SelectAllText)
         self.EditMenu.add_command(label='Delete All', command=self.ClearTextBox)
         self.EditMenu.add_separator()
-        self.EditMenu.add_command(label='Preferences', command=self.Simple)
-        self.EditMenu.add_command(label='NC Directory', command=self.NcFileDirectory)
-        self.EditMenu.add_command(label='DAT Directory', command=self.DatFileDirectory)
+        #self.EditMenu.add_command(label='Preferences', command=self.Simple)
+        self.EditMenu.add_command(label='G-Code Directory', command=self.NcFileDirectory)
+        self.EditMenu.add_command(label='DAT (Airfoils) Directory', command=self.DatFileDirectory)
 
-        self.HelpMenu = Menu(self.menu)
+        self.ModelMenu = Menu(self.menu,tearoff=FALSE)
+        self.menu.add_cascade(label='Model', menu=self.ModelMenu)
+        self.ModelMenu.add_command(label='Load Model', command=self.LoadModel)
+        self.ModelMenu.add_command(label='Save Model', command=self.SaveModel)
+
+
+        self.HelpMenu = Menu(self.menu,tearoff =FALSE )
         self.menu.add_cascade(label='Help', menu=self.HelpMenu)
-        self.HelpMenu.add_command(label='Help Info', command=self.HelpInfo)
+        #self.HelpMenu.add_command(label='Help Info', command=self.HelpInfo)
         self.HelpMenu.add_command(label='About', command=self.HelpAbout)
+
+    
 
     def createWidgets(self):
         self.sp1 = Label(self)
@@ -157,11 +176,11 @@ class Application(Frame):
         self.ModelName.grid(row=1, column=1, sticky=W)
         self.ModelName.focus_set()
 
-        self.SaveModelButton = Button(self, text='Save Model',command=self.SaveModel)
-        self.SaveModelButton.grid(row=1, column=2)
+        #self.SaveModelButton = Button(self, text='Save Model',command=self.SaveModel)
+        #self.SaveModelButton.grid(row=1, column=2)
 
-        self.LoadModelButton = Button(self, text='Load Model',command=self.LoadModel)
-        self.LoadModelButton.grid(row=1, column=3)
+        #self.LoadModelButton = Button(self, text='Load Model',command=self.LoadModel)
+        #self.LoadModelButton.grid(row=1, column=3,pady=3)
 
 
         self.st2 = Label(self, text='WingSpan ')
@@ -206,7 +225,7 @@ class Application(Frame):
         self.RootProfilelistbox.grid(row=4, column=1, sticky=W)
 
         for item in self.profiles:
-           nitem = string.replace(item,self.DatDir + os.sep,'')
+           nitem = str.replace(item,self.DatDir + os.sep,'')
            self.RootProfilelistbox.insert(END, nitem)
         if (len(self.profiles) > 0):
            self.RootProfilelistbox.selection_set(0)
@@ -226,7 +245,7 @@ class Application(Frame):
         self.TipProfilelistbox.grid(row=4, column=3, sticky=W)
 
         for item in self.profiles:
-           nitem = string.replace(item,self.DatDir + os.sep,'')
+           nitem = str.replace(item,self.DatDir + os.sep,'')
            self.TipProfilelistbox.insert(END, nitem)
         if (len(self.profiles) > 0):
            self.TipProfilelistbox.selection_set(0)
@@ -261,7 +280,8 @@ class Application(Frame):
         self.LeadingEdgeSweep.grid(row=6, column=3, sticky=W)
 
 
-        self.st11 = Label(self, text='Gantry Length ')
+        #self.st11 = Label(self, text='Gantry Length ') KH
+        self.st11 = Label(self, text='Carriage Length ')
         self.st11.grid(row=7, column=0, sticky=E)
         self.GantryLengthVar = StringVar()
         self.GantryLengthVar.set(600)
@@ -303,23 +323,23 @@ class Application(Frame):
         self.UnitVar.set(0)
 # XYUV/YZ/XZ
         self.XYUVVar = IntVar()  # 0 for XYUV , 1 for YZ, 2 for XZ, 3 for XYUZ (GRBL mode)
-        self.st13 = Label(self, text='XYUV/YZ/XZ/XYUZ ')
-        self.st13.grid(row=9, column=0, sticky=E)
+        #self.st13 = Label(self, text='XYUV/YZ/XZ/XYUZ ')
+        #self.st13.grid(row=9, column=0, sticky=E)
         urad1 = Radiobutton(self, text='XYUV', variable=self.XYUVVar, value=0)
-        urad1.grid(row=9, column=1, sticky=W)
+        urad1.grid(row=9, column=0, sticky=W)
         urad2 = Radiobutton(self, text='YZ only', variable=self.XYUVVar, value=1)
-        urad2.grid(row=9, column=2, sticky=W)
+        urad2.grid(row=9, column=1, sticky=W)
         urad1 = Radiobutton(self, text='XZ only', variable=self.XYUVVar, value=2)
-        urad1.grid(row=9, column=3, sticky=W)
+        urad1.grid(row=9, column=2, sticky=W)
         urad3 = Radiobutton(self, text='XYUZ(GRBL)', variable=self.XYUVVar, value=3)
-        urad3.grid(row=9, column=4, sticky=W)
-        self.XYUVVar.set(0)
+        urad3.grid(row=9, column=3, sticky=W)
+        self.XYUVVar.set(3)
 
         self.spacer3 = Label(self, text='')
         self.spacer3.grid(row=10, column=0, columnspan=5)
 # gcode block
-        self.g_code = Text(self,width=30,height=14,bd=3)
-        self.g_code.grid(row=11, column=0, columnspan=4, sticky=E+W+N+S)
+        self.g_code = Text(self,width=40,height=14,bd=3)
+        self.g_code.grid(row=11, column=0, columnspan=4, sticky=E+W+N+S,pady=5)
         self.tbscroll = Scrollbar(self,command = self.g_code.yview)
         self.tbscroll.grid(row=11, column=4, sticky=N+S+W)
         self.g_code.configure(yscrollcommand = self.tbscroll.set)
@@ -332,7 +352,7 @@ class Application(Frame):
         self.g_code_right = list()
         self.g_code_both = list()
 
-        self.GenButton = Button(self, text='Generate G-Code',command=self.GenCode)
+        self.GenButton = Button(self, text='Generate G-Code',justify=CENTER,command=self.GenCode)
         self.GenButton.grid(row=12, column=0)
 
 #        self.GenButton = Button(self, text='Generate G-Code bi',command=self.GenCode2)
@@ -341,8 +361,12 @@ class Application(Frame):
 #        self.CopyButton = Button(self, text='Select All & Copy',command=self.SelectCopy)
 #        self.CopyButton.grid(row=12, column=2)
 
-        self.WriteButton = Button(self, text='Write to Files',command=self.WriteToFile)
+        self.WriteButton = Button(self, text='Write to Files', justify=CENTER,command=self.WriteToFile)
         self.WriteButton.grid(row=12, column=1)
+        
+        
+    
+        
 
         if IN_AXIS:
             self.quitButton1 = Button(self, text='Write LEFT to AXIS and Quit',  command=self.WriteLeftToAxis)
@@ -352,13 +376,17 @@ class Application(Frame):
             self.quitButton3 = Button(self, text='Write BOTH to AXIS and Quit',       command=self.WriteBothToAxis)
             self.quitButton3.grid(row=12, column=4, sticky=E)
         else:
-            self.quitButton = Button(self, text='Quit', command=self.MyQuit)
-            self.quitButton.grid(row=12, column=4, sticky=E)
+           self.quitButton = Button(self, text=' Quit Wing G-code', justify=CENTER,command=self.MyQuit)
+           self.quitButton.grid(row=12, column=3 ,pady=8)
+
+    
 
     def MyQuit(self):
-        sys.stdout.write('%')
-        self.quit()
-
+        if IN_AXIS:
+            sys.stdout.write('%')
+            self.quit()
+        else:
+            self.quit()
     #python makes number formatting so hard....
     def Format(self,val,dec):
        s = '%0.' + str(int(dec)) + 'f'
@@ -403,16 +431,17 @@ class Application(Frame):
 
     def Header(self,alist):
         alist.append('%\n')
-        line = 'G90 '
+        line = 'G17\nG90\n'
         if self.UnitVar.get()==1:
-            line = line + 'G20 '
+            line = line + 'G20\n'
             dec = 3
             self.Safe = 0.1  # 0.1 inch
         else:
-            line = line + 'G21 '
+            line = line + 'G21\n'
             self.Safe = 1  #1 mm
             dec = 1
-        line = line + 'M3 S100 '
+        if self.grblmode == FALSE:    
+            line = line + 'M3 S100 '
         if len(self.FeedrateVar.get())>0:
             line = line +  'F%s\n' % self.FeedrateVar.get()
         else:
@@ -437,7 +466,7 @@ class Application(Frame):
         alist.append('(trail ' + self.Format(self.trail,dec)  + ')\n')
         alist.append('(sweep ' + self.Format(self.sweep,dec)  + ')\n')
         alist.append('(washout ' + self.Format(self.washout,dec)  + ')\n')
-        alist.append('(gantry ' + self.Format(self.gantry,dec)  + ')\n')
+        alist.append('(carriage ' + self.Format(self.gantry,dec)  + ')\n')
         alist.append('(feedrate ' + self.Format(self.feedrate,dec)  + ')\n')
         if (self.xy == 0):
             alist.append('(xy right)\n')
@@ -458,7 +487,7 @@ class Application(Frame):
          self.g_code.delete("1.0",END)
          self.GetWValues()
          if (self.wingspan >= self.gantry):
-            self.g_code.insert(END,"PANIC: wingspan greater than gantry separation\n")
+            self.g_code.insert(END,"PANIC: wingspan greater than carriage separation\n")
             return None
          #print "sweep %f" % self.sweep
          self.gap = (self.gantry - self.wingspan) / 2 # gap between end of wing and gantry on each side
@@ -473,7 +502,7 @@ class Application(Frame):
          self.E2 = tan(self.t2) * self.gap
          self.E3 = tan(self.t1) * (self.wingspan + self.gap)
          self.E4 = tan(self.t2) * (self.wingspan + self.gap)
-         self.debug = 0
+         self.debug = 1
          if self.debug:
             print("E1 %0.4f" % self.E1)
             print("E2 %0.4f" % self.E2)
@@ -492,12 +521,12 @@ class Application(Frame):
             print("tiplength  %0.4f" % self.tiplength)
 
          if (self.tiplength < 0):
-            self.g_code.insert(END, "\n   PANIC: tip length is negative, I cannot plot this,\n you need to put the gantry closer together\n")
+            self.g_code.insert(END, "\n   PANIC: tip length is negative, I cannot plot this,\n you need to put the carriages closer together\n")
             return None
 
          self.toffset = self.E2 + self.E4   # tip offset for tip gantry
          if (self.debug):
-            print "toffset %0.4f" % self.toffset
+            print("toffset %0.4f" % self.toffset)
 
          self.g_code.insert(END, "rootfile " + self.rootfile + '\n')
          self.g_code.insert(END, "tipfile  " + self.tipfile  + '\n')
@@ -509,7 +538,7 @@ class Application(Frame):
          if not(os.path.exists(self.tipfile)):
             self.tipfile  =  os.path.join(self.DatDir,self.tipfile)
          if (not(os.path.exists(self.rootfile)) or not(os.path.exists(self.tipfile))):
-            self.g_Code.insert(END, "   PANIC:  either root or tip file not found\n")
+            self.g_code.insert(END, "   PANIC:  either root or tip file not found\n")
             return None
 
 
@@ -571,9 +600,9 @@ class Application(Frame):
          self.Header(self.g_code_both)
 
          if self.xy:
-            self.g_code.insert(END, 'XY gantry left\n')
+            self.g_code.insert(END, 'XY carriage left\n')
          else:
-            self.g_code.insert(END, 'XY gantry right\n')
+            self.g_code.insert(END, 'XY carriage right\n')
          # os.path.join(self.NcFileDirectory, self.modelname, '-right' + self.ext)           
          # os.path.join(self.NcFileDirectory, self.modelname, '-left' + self.nc)
          # os.path.join(self.NcFileDirectory, self.modelname,'-both' + self.nc)
@@ -618,7 +647,7 @@ class Application(Frame):
 #            flist.append("%%\n")  
 #      else:
 #         flist.append( "%%\n");
-      flist.append( "(Generated by wing.py. David the Swarfer, 2017)\n")
+      flist.append( "(Generated by wing.py. David the Swarfer, 2017, rcKeith 2021 for GRBL )\n")
       flist.append( "(from ini file root " + os.path.basename(self.rootfile) + " tip " + os.path.basename(self.tipfile) + " offset %.2f )\n" % (self.toffset))
       if (self.toffset > 0):
          flist.append( "(minimum material chord is %0.1f with wastage of %.3f at trailing edge)\n" % (self.rootlength, self.waste)) 
@@ -630,25 +659,25 @@ class Application(Frame):
          if (self.xyuv != 0):
              flist.append("(generating cartesian gantry, taper ignored)\n")
       
-      flist.append( "(root gantry thickness = %0.1f%s)\n" % (self.rootymax - self.rootymin, self.units))
-      flist.append( "(tip gantry thickness = %0.1f%s)\n" % (self.tipymax - self.tipymin, self.units))
+      flist.append( "(root carriage thickness = %0.1f%s)\n" % (self.rootymax - self.rootymin, self.units))
+      flist.append( "(tip carriage thickness = %0.1f%s)\n" % (self.tipymax - self.tipymin, self.units))
       if (self.rootlength != self.tiplength):
-         flist.append( "(above sizes are for gantry travel, actual wing will be thinner)\n")
+         flist.append( "(above sizes are for carriage travel, actual wing will be thinner)\n")
       if (self.foamchord and  self.foamthickness):
          ws = self.wingspan
          flist.append( "(foam block %.3f'wingspan' x %.3f x %.3f%s)\n" % (ws,self.foamchord,self.foamthickness,self.units));
       if (self.xyuv == 0):
          if (self.xy):
-            flist.append( "(XY gantry left)\n")
+            flist.append( "(XY carriage left)\n")
          else:
-            flist.append( "(XY gantry right)\n")
+            flist.append( "(XY carriage right)\n")
       else:
          if (self.xyuv == 1):
             self.g_code.insert(END, "YZ")
-            flist.append( "(YZ gantry)\n")
+            flist.append( "(YZ carriage)\n")
          else:
             self.g_code.insert(END, "XZ" )
-            flist.append( "(XZ gantry)\n")      
+            flist.append( "(XZ carriage)\n")      
       #z = 0 - self.rootymin
       flist.append( "(trailing edge will be AT LEAST %0.1f%s above bottom of panel)\n" % (self.sp, self.units))
       #if (self.trail > 0):
@@ -664,8 +693,11 @@ class Application(Frame):
 
       if (self.xyuv == 0):
          flist.append( "G90\n")
-         if self.grblmode == False:
-            flist.append("G49 G64 P0.01\n") 
+         if self.grblmode == True:
+            flist.append("G49\n") 
+         else:   
+            flist.append("G49 G64 P0.01\n") #G64 not implemented in GBRL
+            
       else:
          flist.append( "G90 G49\n")
 
@@ -863,7 +895,8 @@ class Application(Frame):
          flist.append("M5\nM30\n")
          flist.append("%\n")
       #end of plot()
-
+      status_bar_update("G-Code Generated")
+    
     def WriteLeftToAxis(self):
         for line in self.g_code_left:
            sys.stdout.write(line)
@@ -904,7 +937,7 @@ class Application(Frame):
          """ save in ini in the NC folder """
          self.NcFileDirectory = self.GetIniData(self.inifile,'Directories','NcFiles')
       except:
-         tkMessageBox.showinfo('Missing INI Data', 'You must set the\n' \
+         tkinter.messagebox.showinfo('Missing INI Data', 'You must set the\n' \
                 'NC File Directory\n' \
                 'before saving a file.\n' \
                 'Go to Edit/NC Directory\n' \
@@ -914,12 +947,12 @@ class Application(Frame):
       modelname = self.ModelNameVar.get()
       modelname = modelname.strip()
       if (modelname == ''):
-         tkMessageBox.showinfo('Need a model name in order to save a model')
+         tkinter.messagebox.showinfo('Need a model name in order to save a model')
          return
 
       inifile = self.NcFileDirectory +'/'+ modelname + '.ini'
 
-      config = ConfigParser.SafeConfigParser()
+      config = configparser.ConfigParser()
 
       # When adding sections or items, add them in the reverse order of
       # how you want them to be displayed in the actual file.
@@ -927,7 +960,7 @@ class Application(Frame):
       # mode of ConfigParser's respective set functions, you can assign
       # non-string values to keys internally, but will receive an error
       # when attempting to write to a file or when you get it in non-raw
-      # mode. SafeConfigParser does not allow such assignments to take place.
+      # mode. ConfigParser does not allow such assignments to take place.
       config.add_section(modelname)
       config.set(modelname, 'wingspan', self.WingSpanVar.get())
       config.set(modelname, 'washout',  self.WashoutVar.get())
@@ -951,13 +984,14 @@ class Application(Frame):
       config.set(modelname, 'inch',      str(unit))
 
       # Writing our configuration file to 'example.cfg'
-      with open(inifile, 'wb') as configfile:
+      with open(inifile, 'w') as configfile:
           config.write(configfile)
       self.g_code.insert(END, 'Saved model\n')
       self.WriteIniData(self.inifile,'autoload','model',modelname)      #write for autoload
+      status_bar_update("Model Settings Saved as " + modelname)
 
     def ReadModel(self, filename):
-        config = ConfigParser.SafeConfigParser()
+        config = configparser.ConfigParser()
         config.read(filename)
         #get the model name from the filename
         modelname = os.path.splitext(os.path.basename(filename))[0]
@@ -1001,7 +1035,7 @@ class Application(Frame):
          """ save in ini in the NC folder """
          self.NcFileDirectory = self.GetIniData(self.inifile,'Directories','NcFiles')
       except:
-         tkMessageBox.showinfo('Missing INI Data', 'You must set the\n' \
+         tkinter.messagebox.showinfo('Missing INI Data', 'You must set the\n' \
                 'NC File Directory\n' \
                 'before saving a file.\n' \
                 'Go to Edit/NC Directory\n' \
@@ -1052,19 +1086,19 @@ class Application(Frame):
         If the file is not found or a section or an option is not found
         returns an exception
         """
-        self.cp = ConfigParser.SafeConfigParser()
+        self.cp = configparser.ConfigParser()
         try:
             self.cp.read(FileName)
             try:
                 self.cp.has_section(SectionName)
                 try:
                     IniData=self.cp.get(SectionName,OptionName)
-                except ConfigParser.NoOptionError:
-                    raise Exception,'NoOptionError'
-            except ConfigParser.NoSectionError:
-                raise Exception,'NoSectionError'
+                except configparser.NoOptionError:
+                    raise Exception('NoOptionError')
+            except configparser.NoSectionError:
+                raise Exception('NoSectionError')
         except IOError:
-            raise Exception,'NoFileError'
+            raise Exception('NoFileError')
         return IniData
 
     def WriteIniData(self,FileName,SectionName,OptionName,OptionData):
@@ -1072,12 +1106,12 @@ class Application(Frame):
         Pass the file name, section name, option name and option data
         When complete returns 'sucess'
         """
-        self.cp = ConfigParser.SafeConfigParser()
+        self.cp = configparser.ConfigParser()
         self.cp.read(FileName)  # read existing stuff and add to it
         if not self.cp.has_section(SectionName):
             self.cp.add_section(SectionName)
         self.cp.set(SectionName,OptionName,OptionData)
-        with open(FileName, 'wb') as configfile:
+        with open(FileName, 'w') as configfile:
            self.cp.write(configfile)
 
 
@@ -1094,10 +1128,10 @@ class Application(Frame):
         try:
             self.NcFileDirectory = self.GetIniData(self.inifile,'Directories','NcFiles')
         except:
-            tkMessageBox.showinfo('Missing INI', 'You must set the\n' \
-                'NC File Directory\n' \
+            tkinter.messagebox.showinfo('Missing INI', 'You must set the\n' \
+                'G-code File Directory\n' \
                 'before saving a file.\n' \
-                'Go to Edit/NC Directory\n' \
+                'Go to Edit/G-code Directory\n' \
                 'in the menu to set this option')
 #        try:
         # os.path.join(self.NcFileDirectory, self.modelname, '-right.nc')           
@@ -1110,6 +1144,8 @@ class Application(Frame):
               of.write(line)
            of.close()
            self.g_code.insert(END, 'Right file written ' + fname + '\n')
+           right_file= os.path.basename(fname)
+           
 
            fname = os.path.join(self.NcFileDirectory, self.modelname + '-left' + self.ext)
            of = open(fname,'w')
@@ -1117,6 +1153,8 @@ class Application(Frame):
               of.write(line)
            of.close()
            self.g_code.insert(END, 'Left file written ' + fname + '\n')
+           left_file= os.path.basename(fname)
+           status_bar_update("G-Code Files Created [" + left_file + "] [" + right_file +"]")
 
            both = os.path.join(self.NcFileDirectory, self.modelname + '-both' + self.ext)
            if self.need == 0:    
@@ -1158,7 +1196,7 @@ class Application(Frame):
             self.WriteIniData(self.inifile,'Directories','DatFiles',DirName)
 
     def Simple(self):
-        tkMessageBox.showinfo('Feature', 'Sorry this Feature has\nnot been programmed yet.')
+        tkinter.messagebox.showinfo('Feature', 'Sorry this Feature has\nnot been programmed yet.')
 
     def ClearTextBox(self):
         self.g_code.delete(1.0,END)
@@ -1169,17 +1207,11 @@ class Application(Frame):
     def SelectCopy(self):
         self.SelectAllText()
         self.CopyClpBd()
-
-    def HelpInfo(self):
-        SimpleDialog(self,
-            text='See the github page for help.\n',
-            buttons=['Ok'],
-            default=0,
-            title='User Info').go()
+         
     def HelpAbout(self):
-        tkMessageBox.showinfo('Help About', 'Programmed by\n'
-            'the Swarfer\n'
-            'Version 1.0.1')
+        tkinter.messagebox.showinfo('Help About', 'Programmed by '
+            'the Swarfer\n\nrcKeith conversion to Python3\n\nand GRBL compatibilty\n\n'
+            'Version 2.0')
 
     # take an array read from a dat file and strip out all comments so we only have the co-ord numbers on return
     def stripfile(self, thefile):
@@ -1189,8 +1221,8 @@ class Application(Frame):
          bits = 0
          for key in range(0, len(thefile)-1):
             line = thefile[key]
-            bits = string.strip(line)
-            bits = string.split(bits) #(preg_split('/[ ]+|\t/',trim(self.line));
+            bits = str.strip(line) 
+            bits = str.split(bits) #(preg_split('/[ ]+|\t/',trim(self.line));
             for idx in range(0, len(bits)-1): # prevent losing lines like '0 0'
                if (bits[idx] == '0'):
                   bits[idx] = '0.0'
@@ -1204,7 +1236,7 @@ class Application(Frame):
                thefile.remove(line)
                done = 0
                break
-            thefile[key] = string.strip(line)
+            thefile[key] = str.strip(line)
       return thefile
 
     #creates the self.root array of cordinates
@@ -1312,7 +1344,7 @@ class Application(Frame):
     #new way, move the top to be trail above the bottom surface
     def TrailingEdgeLimits2(self):
       # do trailing edge limiting for both profiles
-        for this in range(0, self.idxl):
+        for this in range(0, round(self.idxl)):
             other = len(self.root) - 1 - this   # index of the bottom surface point
             dist = self.root[this][1] - self.root[other][1]
             if dist < self.trail:
@@ -1331,13 +1363,13 @@ class Application(Frame):
       else:
          off = 6    #min offet from outside of foam
       if (self.foamthickness == 0):
-         print "foamthick = 0" 
+         print("foamthick = 0") 
          self.foamthickness = self.rootymax - self.rootymin + off
          self.g_code.insert(END, "   foamthickness calculated at " + self.Format(self.foamthickness,2) + self.units) 
          self.sp = ((self.foamthickness - self.skintop - self.skinbot) * -self.rootymin / (self.rootymax - self.rootymin)) + self.skinbot
       else:
          if (self.actualrootthick > (self.foamthickness - self.skintop - self.skinbot) ):
-            print "too thick"
+            print("too thick")
             self.g_code.insert(END,"      ERROR: actualroothickness %.2f EXCEEDS foamthickness %.2f" % (self.actualrootthick, self.foamthickness))
             self.g_code.insert(END,"		Recalculating foamthickness\n")
             self.foamthickness = round(self.actualrootthick + off,0)
@@ -1523,7 +1555,23 @@ class Application(Frame):
             rotatedPolygon.append([ corner[0]*cos(theta)-corner[1]*sin(theta) , corner[0]*sin(theta)+corner[1]*cos(theta)] )
         return rotatedPolygon
 
-        
+###
+
+
 app = Application()
-app.master.title('Wing hotwire G-Code Generator')
+app.master.title('Wing G-Code Generator 2.00')
+# only load icon if file exists - still want it simple to install, one file download
+if os.path.exists('f18.ico'):
+   app.master.iconbitmap('f18.ico')
+
+# Status Bar       
+status_bar = Label(app.master, text="Ready   ", anchor=E,)
+status_bar.pack(fill=X, side=BOTTOM, ipady=5)
+
+def status_bar_update(status_mgs): 
+      status_bar.config(text = status_mgs + "      ",foreground ="Blue")
+      return
+
+
+
 app.mainloop()
