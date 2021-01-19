@@ -46,8 +46,8 @@ Start the cut.  There is never any cut actually *at* 0,0 so this is a safe zero 
 
 ### XYUV/XZ/YZ/XYUZ
 These options let you choose various forms of output.
-0. XYUV - the normal selection for a LinuxCNC dual gantry setup
-0. XZ - run a bow on XZ on a router style machine
-0. YZ - run a bow on YZ on a router style machine
-0. XYUZ - run a GRBL controlled dual gantry machine using [4 axis GRBL](https://www.rckeith.co.uk/how-to-build-a-usb-cnc-hot-wire-foam-cutter/).
+* XYUV - the normal selection for a LinuxCNC dual gantry setup
+* XZ - run a bow on XZ on a router style machine
+* YZ - run a bow on YZ on a router style machine
+* XYUZ - run a GRBL controlled dual gantry machine using [4 axis GRBL](https://www.rckeith.co.uk/how-to-build-a-usb-cnc-hot-wire-foam-cutter/).
 
