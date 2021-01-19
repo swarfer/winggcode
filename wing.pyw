@@ -56,6 +56,7 @@
 from tkinter import *
 from math import *
 from tkinter.simpledialog import *
+from tkinter.filedialog import *
 import configparser
 from decimal import *
 import tkinter.messagebox
@@ -176,11 +177,11 @@ class Application(Frame):
         self.ModelName.grid(row=1, column=1, sticky=W)
         self.ModelName.focus_set()
 
-        #self.SaveModelButton = Button(self, text='Save Model',command=self.SaveModel)
-        #self.SaveModelButton.grid(row=1, column=2)
+        self.SaveModelButton = Button(self, text='Save Model',command=self.SaveModel)
+        self.SaveModelButton.grid(row=1, column=2)
 
-        #self.LoadModelButton = Button(self, text='Load Model',command=self.LoadModel)
-        #self.LoadModelButton.grid(row=1, column=3,pady=3)
+        self.LoadModelButton = Button(self, text='Load Model',command=self.LoadModel)
+        self.LoadModelButton.grid(row=1, column=3,pady=3)
 
 
         self.st2 = Label(self, text='WingSpan ')
@@ -502,7 +503,7 @@ class Application(Frame):
          self.E2 = tan(self.t2) * self.gap
          self.E3 = tan(self.t1) * (self.wingspan + self.gap)
          self.E4 = tan(self.t2) * (self.wingspan + self.gap)
-         self.debug = 1
+         self.debug = 0
          if self.debug:
             print("E1 %0.4f" % self.E1)
             print("E2 %0.4f" % self.E2)
@@ -521,7 +522,7 @@ class Application(Frame):
             print("tiplength  %0.4f" % self.tiplength)
 
          if (self.tiplength < 0):
-            self.g_code.insert(END, "\n   PANIC: tip length is negative, I cannot plot this,\n you need to put the carriages closer together\n")
+            self.g_code.insert(END, "\n   PANIC: tip length is negative, I cannot plot this,\n you need to put the gantry closer together\n")
             return None
 
          self.toffset = self.E2 + self.E4   # tip offset for tip gantry
@@ -694,10 +695,9 @@ class Application(Frame):
       if (self.xyuv == 0):
          flist.append( "G90\n")
          if self.grblmode == True:
-            flist.append("G49\n") 
-         else:   
+            flist.append("G49 \n") 
+         else:
             flist.append("G49 G64 P0.01\n") #G64 not implemented in GBRL
-            
       else:
          flist.append( "G90 G49\n")
 
